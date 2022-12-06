@@ -1,0 +1,6 @@
+{
+  "db_dsn": "DBI:mysql:database=grafana;host=127.0.0.1;port=3306",
+  "db_user": "root",
+  "db_password": "toor",
+  "github_token": "ghp_<PERSONAL_ACCESS_TOKEN_WITH_PUBLIC_REPO_PERMISSION>"
+}
