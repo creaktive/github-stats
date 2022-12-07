@@ -86,11 +86,12 @@ sub record_data($config, $stats) {
 
     $dbh->{AutoCommit} = 0;
     my $sth = $dbh->prepare_cached($insert);
-    $sth->finish;
-    $dbh->{AutoCommit} = 1;
 
     my $n = 0;
     $n += $sth->execute(@$_) for @$stats;
+
+    $sth->finish;
+    $dbh->{AutoCommit} = 1;
 
     say STDERR "$n rows inserted";
     return;
