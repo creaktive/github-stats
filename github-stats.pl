@@ -80,14 +80,19 @@ sub record_data($config, $stats) {
     my $table = $config->{db_table} || 'github_stats';
 
     my @headers = qw(date repo type total uniques);
-    my $sth = $dbh->prepare(
-        sprintf "INSERT IGNORE INTO $table (`%s`) VALUES (%s)",
-            join('`,`' => @headers),
-            join(',' => ('?') x scalar(@headers)),
-    );
+    my $insert = sprintf "INSERT IGNORE INTO $table (`%s`) VALUES (%s)",
+        join('`,`' => @headers),
+        join(',' => ('?') x scalar(@headers));
 
-    $sth->execute(@$_) for @$stats;
+    $dbh->{AutoCommit} = 0;
+    my $sth = $dbh->prepare_cached($insert);
+    $sth->finish;
+    $dbh->{AutoCommit} = 1;
 
+    my $n = 0;
+    $n += $sth->execute(@$_) for @$stats;
+
+    say STDERR "$n rows inserted";
     return;
 }
 
