@@ -77,17 +77,16 @@ sub record_data($config, $stats) {
         @$config{qw{db_dsn db_user db_password}},
         { RaiseError => 1 },
     );
+    my $table = $config->{db_table} || 'github_stats';
 
     my @headers = qw(date repo type total uniques);
     my $sth = $dbh->prepare(
-        sprintf 'INSERT IGNORE INTO github_stats (`%s`) VALUES (%s)',
+        sprintf "INSERT IGNORE INTO $table (`%s`) VALUES (%s)",
             join('`,`' => @headers),
             join(',' => ('?') x scalar(@headers)),
     );
 
-    for my $row (@$stats) {
-        $sth->execute(@$row);
-    }
+    $sth->execute(@$_) for @$stats;
 
     return;
 }
@@ -103,7 +102,7 @@ sub main {
     };
 
     my $data = fetch_data($config->{github_token});
-    # say join "\t", @$_ for @$data;
+    say join "\t", @$_ for @$data;
     record_data($config, $data);
 
     return 0;
