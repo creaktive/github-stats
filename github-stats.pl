@@ -9,9 +9,11 @@ use FindBin qw($RealBin $RealScript);
 use HTTP::Tiny ();
 use JSON::PP qw(decode_json);
 
-sub fetch_calendar($login) {
-    my $ua = HTTP::Tiny->new(verify_SSL => 1);
-    my $response = $ua->get("https://github.com/$login");
+sub fetch_calendar($login, $year = '') {
+    my $url = "https://github.com/users/$login/contributions";
+    $url .= "?from=${year}-01-01&to=${year}-12-31" if $year;
+
+    my $response = HTTP::Tiny->new(verify_SSL => 1)->get($url);
     die $response->{reason} unless $response->{success};
 
     my $parser = qr{
@@ -27,7 +29,7 @@ sub fetch_calendar($login) {
         $+{date} . ' 00:00:00',
         0 + $+{count},
     ] while $response->{content} =~ m{$parser}gosx;
-    pop @calendar;
+    pop @calendar unless $year;
 
     return \@calendar;
 }
@@ -98,7 +100,7 @@ sub fetch_repos($token) {
 sub insert_array($dbh, $table, $headers, $data) {
     my $max = $dbh->selectrow_arrayref(
         "SELECT MAX(`@{[ $headers->[0] ]}`) FROM $table",
-    )->[0];
+    )->[0] // '';
 
     $dbh->{AutoCommit} = 0;
 
