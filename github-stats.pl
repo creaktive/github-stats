@@ -9,7 +9,30 @@ use FindBin qw($RealBin $RealScript);
 use HTTP::Tiny ();
 use JSON::PP qw(decode_json);
 
-sub fetch_data($token) {
+sub fetch_calendar($login) {
+    my $ua = HTTP::Tiny->new(verify_SSL => 1);
+    my $response = $ua->get("https://github.com/$login");
+    die $response->{reason} unless $response->{success};
+
+    my $parser = qr{
+        <rect [^>]+
+            \b class="ContributionCalendar-day" [^>]+
+            \b data-count="(?<count> \d+)" [^>]+
+            \b data-date="(?<date> \d{4}-\d{2}-\d{2})" [^>]*
+        >
+    }x;
+
+    my @calendar;
+    push @calendar => [
+        $+{date} . ' 00:00:00',
+        0 + $+{count},
+    ] while $response->{content} =~ m{$parser}gosx;
+    pop @calendar;
+
+    return \@calendar;
+}
+
+sub fetch_repos($token) {
     my $api = 'https://api.github.com';
     my $gh = HTTP::Tiny->new(
         default_headers => {
@@ -72,28 +95,45 @@ sub fetch_data($token) {
     return \@stats;
 }
 
-sub record_data($config, $stats) {
+sub insert_array($dbh, $table, $headers, $data) {
+    $dbh->{AutoCommit} = 0;
+
+    my $insert = sprintf "INSERT IGNORE INTO $table (`%s`) VALUES (%s)",
+        join('`,`' => @$headers),
+        join(',' => ('?') x scalar(@$headers));
+
+    my $sth = $dbh->prepare_cached($insert);
+    my $n = 0;
+    $n += $sth->execute(@$_) for @$data;
+    $sth->finish;
+
+    say STDERR "$n rows inserted into $table";
+
+    $dbh->{AutoCommit} = 1;
+    return $n;
+}
+
+sub record_data($config, $calendar, $stats) {
     my $dbh = DBI->connect(
         @$config{qw{db_dsn db_user db_password}},
         { RaiseError => 1 },
     );
-    my $table = $config->{db_table} || 'github_stats';
 
-    my @headers = qw(date repo type total uniques);
-    my $insert = sprintf "INSERT IGNORE INTO $table (`%s`) VALUES (%s)",
-        join('`,`' => @headers),
-        join(',' => ('?') x scalar(@headers));
+    insert_array(
+        $dbh,
+        $config->{db_table_calendar},
+        [qw(date contributions)],
+        $calendar,
+    );
 
-    $dbh->{AutoCommit} = 0;
-    my $sth = $dbh->prepare_cached($insert);
+    insert_array(
+        $dbh,
+        $config->{db_table_stats},
+        [qw(date repo type total uniques)],
+        $stats,
+    );
 
-    my $n = 0;
-    $n += $sth->execute(@$_) for @$stats;
-
-    $sth->finish;
-    $dbh->{AutoCommit} = 1;
-
-    say STDERR "$n rows inserted";
+    $dbh->disconnect;
     return;
 }
 
@@ -107,9 +147,13 @@ sub main {
         $data;
     };
 
-    my $data = fetch_data($config->{github_token});
-    say join "\t", @$_ for @$data;
-    record_data($config, $data);
+    my $calendar = fetch_calendar($config->{github_login});
+    # say join "\t", @$_ for @$calendar;
+
+    my $stats = fetch_repos($config->{github_token});
+    # say join "\t", @$_ for @$stats;
+
+    record_data($config, $calendar, $stats);
 
     return 0;
 }
@@ -117,6 +161,14 @@ sub main {
 exit main();
 
 __DATA__
+CREATE TABLE `github_calendar` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `date` timestamp NOT NULL,
+  `contributions` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `date` (`date`)
+);
+
 CREATE TABLE `github_stats` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `date` timestamp NOT NULL,
