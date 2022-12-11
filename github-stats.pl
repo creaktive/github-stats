@@ -182,7 +182,7 @@ sub main {
     };
 
     my $calendar = fetch_calendar($config->{github_login});
-    say join "\t", @$_ for @$calendar;
+    # say join "\t", @$_ for @$calendar;
 
     my ($stats, $counts) = fetch_repos($config->{github_token});
     # say join "\t", @$_ for @$stats;
