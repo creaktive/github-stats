@@ -8,6 +8,8 @@ use DBI ();
 use FindBin qw($RealBin $RealScript);
 use HTTP::Tiny ();
 use JSON::PP qw(decode_json);
+use List::Util qw(shuffle);
+use Time::Piece;
 
 sub fetch_calendar($login, $year = '') {
     my $url = "https://github.com/users/$login/contributions";
@@ -34,6 +36,15 @@ sub fetch_calendar($login, $year = '') {
     return \@calendar;
 }
 
+my @counts = qw(
+    date
+    repo
+    forks
+    open_issues
+    size
+    watchers
+);
+
 sub fetch_repos($token) {
     my $api = 'https://api.github.com';
     my $gh = HTTP::Tiny->new(
@@ -44,20 +55,27 @@ sub fetch_repos($token) {
         verify_SSL => 1,
     );
 
-    my @repos;
     my @stats;
+    my %counts;
 
     my $n = 100;
     for (my $p = 1;; $p++) {
+        my $now = gmtime->ymd . ' ' . gmtime->hms;
         my $response = $gh->get("$api/user/repos?type=public&per_page=$n&page=$p");
         die $response->{reason} unless $response->{success};
 
-        my @chunk = map { $_->{full_name} } decode_json($response->{content})->@*;
-        push @repos => @chunk;
-        last if $n > scalar @chunk;
+        my $c = 0;
+        for my $repo (decode_json($response->{content})->@*) {
+            $repo->{date} = $now;
+            $repo->{repo} = $repo->{full_name};
+            $counts{$repo->{repo}} = [@$repo{@counts}];
+            ++$c;
+        }
+
+        last if $n > $c;
     }
 
-    for my $repo (@repos) {
+    for my $repo (shuffle keys %counts) {
         my $response = $gh->get("$api/repos/$repo/traffic/views");
         die $response->{reason} unless $response->{success};
 
@@ -70,7 +88,7 @@ sub fetch_repos($token) {
         ] for decode_json($response->{content})->{views}->@*;
     }
 
-    for my $repo (@repos) {
+    for my $repo (shuffle keys %counts) {
         my $response = $gh->get("$api/repos/$repo/traffic/clones");
         die $response->{reason} unless $response->{success};
 
@@ -94,7 +112,10 @@ sub fetch_repos($token) {
         ($_->[0] lt $stats[-1]->[0])
     } @stats if @stats;
 
-    return \@stats;
+    return (
+        \@stats,
+        [sort { $a->[1] cmp $b->[1] } values %counts],
+    );
 }
 
 sub insert_array($dbh, $table, $headers, $data) {
@@ -119,7 +140,7 @@ sub insert_array($dbh, $table, $headers, $data) {
     return $n;
 }
 
-sub record_data($config, $calendar, $stats) {
+sub record_data($config, $calendar, $stats, $counts) {
     my $dbh = DBI->connect(
         @$config{qw{db_dsn db_user db_password}},
         { RaiseError => 1 },
@@ -139,6 +160,13 @@ sub record_data($config, $calendar, $stats) {
         $stats,
     );
 
+    insert_array(
+        $dbh,
+        $config->{db_table_counts},
+        \@counts,
+        $counts,
+    );
+
     $dbh->disconnect;
     return;
 }
@@ -154,12 +182,13 @@ sub main {
     };
 
     my $calendar = fetch_calendar($config->{github_login});
-    # say join "\t", @$_ for @$calendar;
+    say join "\t", @$_ for @$calendar;
 
-    my $stats = fetch_repos($config->{github_token});
+    my ($stats, $counts) = fetch_repos($config->{github_token});
     # say join "\t", @$_ for @$stats;
+    # say join "\t", @$_ for @$counts;
 
-    record_data($config, $calendar, $stats);
+    record_data($config, $calendar, $stats, $counts);
 
     return 0;
 }
@@ -184,4 +213,16 @@ CREATE TABLE `github_stats` (
   `uniques` int(11) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `date` (`date`,`repo`,`type`)
+);
+
+CREATE TABLE `github_counts` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `date` timestamp NOT NULL,
+  `repo` varchar(128) NOT NULL,
+  `forks` int(11) NOT NULL,
+  `open_issues` int(11) NOT NULL,
+  `size` int(11) NOT NULL,
+  `watchers` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `date` (`date`,`repo`)
 );
