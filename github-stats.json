@@ -4,6 +4,7 @@
   "db_password": "toor",
   "db_table_stats": "github_stats",
   "db_table_calendar": "github_calendar",
+  "db_table_counts": "github_counts",
   "github_login": "torvalds",
   "github_token": "ghp_<PERSONAL_ACCESS_TOKEN_WITH_PUBLIC_REPO_PERMISSION>"
 }
