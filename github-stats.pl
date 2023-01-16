@@ -9,6 +9,7 @@ use FindBin qw($RealBin $RealScript);
 use HTTP::Tiny ();
 use JSON::PP qw(decode_json);
 use List::Util qw(shuffle);
+use Scalar::Util qw(looks_like_number);
 use Time::Piece;
 
 sub fetch_calendar($login, $year = '') {
@@ -21,15 +22,14 @@ sub fetch_calendar($login, $year = '') {
     my $parser = qr{
         <rect [^>]+
             \b class="ContributionCalendar-day" [^>]+
-            \b data-count="(?<count> \d+)" [^>]+
             \b data-date="(?<date> \d{4}-\d{2}-\d{2})" [^>]*
-        >
+        > (?<count> \w+)
     }x;
 
     my @calendar;
     push @calendar => [
         $+{date} . ' 00:00:00',
-        0 + $+{count},
+        looks_like_number($+{count}) ? 0 + $+{count} : 0,
     ] while $response->{content} =~ m{$parser}gosx;
     pop @calendar unless $year;
 
