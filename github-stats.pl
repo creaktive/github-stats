@@ -119,19 +119,15 @@ sub fetch_repos($token) {
 }
 
 sub insert_array($dbh, $table, $headers, $data) {
-    my $max = $dbh->selectrow_arrayref(
-        "SELECT MAX(`@{[ $headers->[0] ]}`) FROM $table",
-    )->[0] // '';
-
     $dbh->{AutoCommit} = 0;
 
-    my $insert = sprintf "INSERT INTO $table (`%s`) VALUES (%s)",
+    my $insert = sprintf "REPLACE INTO $table (`%s`) VALUES (%s)",
         join('`,`' => @$headers),
         join(',' => ('?') x scalar(@$headers));
 
     my $sth = $dbh->prepare_cached($insert);
     my $n = 0;
-    $n += $sth->execute(@$_) for grep { $_->[0] gt $max } @$data;
+    $n += $sth->execute(@$_) for @$data;
     $sth->finish;
 
     say STDERR "$n rows inserted into $table";
