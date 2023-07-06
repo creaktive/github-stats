@@ -12,6 +12,8 @@ use List::Util qw(shuffle);
 use Scalar::Util qw(looks_like_number);
 use Time::Piece;
 
+use constant DATE_SUFFIX => ' 00:00:00';
+
 sub fetch_calendar($login, $year = '') {
     my $url = "https://github.com/users/$login/contributions";
     $url .= "?from=${year}-01-01&to=${year}-12-31" if $year;
@@ -28,7 +30,7 @@ sub fetch_calendar($login, $year = '') {
 
     my @calendar;
     push @calendar => [
-        $+{date} . ' 00:00:00',
+        $+{date} . DATE_SUFFIX,
         looks_like_number($+{count}) ? 0 + $+{count} : 0,
     ] while $response->{content} =~ m{$parser}gosx;
     pop @calendar unless $year;
@@ -60,7 +62,7 @@ sub fetch_repos($token) {
 
     my $n = 100;
     for (my $p = 1;; $p++) {
-        my $now = gmtime->ymd . ' ' . gmtime->hms;
+        my $now = gmtime->ymd . DATE_SUFFIX;
         my $response = $gh->get("$api/user/repos?type=public&per_page=$n&page=$p");
         next unless $response->{success};
 
