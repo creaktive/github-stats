@@ -67,10 +67,7 @@ sub fetch_repos($token) {
     for (my $p = 1;; $p++) {
         my $now = gmtime->ymd . DATE_SUFFIX;
         my $response = $gh->get("$api/user/repos?type=public&per_page=$n&page=$p");
-        unless ($response->{success}) {
-            warn $response->{reason};
-            next;
-        }
+        next unless $response->{success};
 
         my $c = 0;
         for my $repo (decode_json($response->{content})->@*) {
@@ -85,10 +82,7 @@ sub fetch_repos($token) {
 
     for my $repo (shuffle keys %counts) {
         my $response = $gh->get("$api/repos/$repo/traffic/views");
-        unless ($response->{success}) {
-            warn $response->{reason};
-            next;
-        }
+        next unless $response->{success};
 
         push @stats => [
             $_->{timestamp} =~ tr{TZ}{ }dr,
@@ -101,10 +95,7 @@ sub fetch_repos($token) {
 
     for my $repo (shuffle keys %counts) {
         my $response = $gh->get("$api/repos/$repo/traffic/clones");
-        unless ($response->{success}) {
-            warn $response->{reason};
-            next;
-        }
+        next unless $response->{success};
 
         push @stats => [
             $_->{timestamp} =~ tr{TZ}{ }dr,
