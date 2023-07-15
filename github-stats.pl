@@ -22,10 +22,12 @@ sub fetch_calendar($login, $year = '') {
     die $response->{reason} unless $response->{success};
 
     my $parser = qr{
-        <rect [^>]+
-            \b class="ContributionCalendar-day" [^>]+
-            \b data-date="(?<date> \d{4}-\d{2}-\d{2})" [^>]*
-        > (?<count> \w+)
+        (?(DEFINE) (?<tag> [^>]*))
+        <td (?&tag)
+            \b class="ContributionCalendar-day" (?&tag)
+            \b data-date="(?<date> \d{4}-\d{2}-\d{2})" (?&tag)
+        >
+        <span (?&tag)>(?<count> \w+)
     }x;
 
     my @calendar;
@@ -33,6 +35,7 @@ sub fetch_calendar($login, $year = '') {
         $+{date} . DATE_SUFFIX,
         looks_like_number($+{count}) ? 0 + $+{count} : 0,
     ] while $response->{content} =~ m{$parser}gosx;
+    @calendar = sort { $a->[0] cmp $b->[0] } @calendar;
     pop @calendar unless $year;
 
     return \@calendar;
