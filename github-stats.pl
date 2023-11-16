@@ -24,10 +24,13 @@ sub fetch_calendar($login, $year = '') {
     my $parser = qr{
         (?(DEFINE) (?<tag> [^>]*))
         <td (?&tag)
-            \b class="ContributionCalendar-day" (?&tag)
             \b data-date="(?<date> \d{4}-\d{2}-\d{2})" (?&tag)
+            \b class="ContributionCalendar-day" (?&tag)
         >
-        <span (?&tag)>(?<count> \w+)
+        \s*
+        </td>
+        \s*
+        <tool-tip (?&tag)>(?<count> \w+)
     }x;
 
     my @calendar;
